@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AmiBa Live - Regarder</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Montserrat',sans-serif}
+body{background:#05050a;color:#fff;display:flex;flex-direction:column;min-height:100vh}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 25px;background:#11111a;border-bottom:1px solid #222}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#7000ff,#ff004c);border-radius:8px;display:grid;place-items:center}
+.player-wrap{flex:1;position:relative;background:#000;display:grid;place-items:center;overflow:hidden}
+video{width:100%;height:100%;max-height:82vh;object-fit:contain}
+.overlay{position:absolute;inset:0;pointer-events:none}
+.top-bar{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:15px;pointer-events:all}
+.bein{ background:linear-gradient(90deg,#7000ff,#4a00a8); padding:6px 14px; border-radius:4px; font-weight:800; font-size:13px; display:flex; gap:6px; align-items:center }
+.bein span{background:#fff;color:#7000ff;padding:1px 5px;border-radius:3px;font-size:10px}
+.live{ background:#ff004c; padding:6px 12px; border-radius:4px; font-size:11px; font-weight:700; animation:pulse 1.5s infinite }
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,0,76,.7)} 70%{box-shadow:0 0 0 10px rgba(255,0,76,0)} 100%{box-shadow:0 0 0 0 rgba(255,0,76,0)}}
+.bottom-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.9));padding:20px;display:flex;align-items:center;gap:15px;pointer-events:all}
+.btn{width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);color:#fff;cursor:pointer;font-size:18px}
+.btn:hover{background:#7000ff}
+input[type=range]{accent-color:#7000ff}
+.quality{margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;padding:8px 12px;border-radius:8px}
+.status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(15,15,26,.9);padding:30px 40px;border-radius:16px;text-align:center}
+footer{text-align:center;padding:15px;background:#11111a;font-size:11px;opacity:.5;letter-spacing:1px}
+</style>
+</head>
+<body>
+<header>
+<div class="logo"><div class="logo-icon">AB</div> AmiBa LIVE</div>
+<div style="display:flex;gap:10px;align-items:center;font-size:12px"><span id="count">0</span> en direct • <span style="color:#7000ff">FLUIDE HD</span></div>
+</header>
+
+<div class="player-wrap" id="wrap">
+<video id="remoteVideo" autoplay playsinline controlsList="nodownload"></video>
+<div class="overlay">
+<div class="top-bar">
+<div class="bein"><span>beIN</span> SPORTS LIVE</div>
+<div class="live">● DIRECT</div>
+</div>
+<div class="bottom-controls">
+<button class="btn" id="playBtn">▶️</button>
+<button class="btn" id="muteBtn">🔊</button>
+<input type="range" id="vol" min="0" max="100" value="100" style="width:120px">
+<select class="quality" id="q">
+<option value="auto">AUTO</option>
+<option value="1080">1080p</option>
+<option value="720">720p</option>
+<option value="360">360p</option>
+</select>
+<button class="btn" id="fs">⛶</button>
+</div>
+</div>
+<div class="status" id="status">
+<h2 style="margin-bottom:10px">Connexion au direct...</h2>
+<p style="opacity:.6;font-size:13px" id="statusText">En attente du signal AmiBa Groupe</p>
+</div>
+</div>
+
+<footer>Site by AmiBa Groupe | Diffusion fluide et rapide • 2026</footer>
+
+<script>
+const urlParams = new URLSearchParams(location.search);
+const hostId = urlParams.get('id');
+const video = document.getElementById('remoteVideo');
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+
+if(!hostId){
+  statusText.innerHTML = "Lien invalide. L'URL doit être comme :<br><b>view.html?id=AMIBA-XXX</b>";
+} else {
+  const peer = new Peer({ config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]} });
+
+  peer.on('open', myId=>{
+    statusText.innerText='Connexion à '+hostId+'...';
+    const conn = peer.connect(hostId);
+    const call = peer.call(hostId, new MediaStream()); // viewer sans stream
+
+    call.on('stream', remoteStream=>{
+      video.srcObject = remoteStream;
+      statusEl.style.display='none';
+      video.play().catch(()=>{});
+
+      // Compteur visiteurs local
+      let c = parseInt(localStorage.getItem('amiba_views')||'0')+1;
+      localStorage.setItem('amiba_views', c);
+      document.getElementById('count').innerText = Math.floor(Math.random()*20+ c);
+    });
+
+    call.on('error', e=>{
+      statusText.innerText='Erreur de connexion: '+e.message;
+    });
+    call.on('close', ()=>{
+      statusEl.style.display='block';
+      statusText.innerText='Le direct est terminé.';
+    });
+  });
+}
+
+// Controls
+document.getElementById('playBtn').onclick=()=>{ if(video.paused) video.play(); else video.pause(); document.getElementById('playBtn').innerText= video.paused?'⏸️':'▶️'; };
+document.getElementById('muteBtn').onclick=()=>{
+  video.muted=!video.muted;
+  document.getElementById('muteBtn').innerText=video.muted?'🔇':'🔊';
+};
+document.getElementById('vol').oninput=(e)=>{ video.volume=e.target.value/100; };
+document.getElementById('fs').onclick=()=>{ document.getElementById('wrap').requestFullscreen(); };
+document.getElementById('q').onchange=(e)=>{
+  // Qualité côté viewer = demande côté CSS (le host gère la vraie qualité)
+  const q=e.target.value;
+  if(q==='360') video.style.filter='blur(0.5px)';
+  else video.style.filter='none';
+  // Tu peux envoyer un message au host pour changer sa qualité si tu veux
+};
+</script>
+</body>
+</html>
